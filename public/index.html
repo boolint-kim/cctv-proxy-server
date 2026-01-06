@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV 영상 뷰어</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .input-group label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 100px;
+        }
+        
+        .input-group input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(74, 144, 226, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: 500;
+            display: none;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+        }
+        
+        .video-frame {
+            width: 100%;
+            height: 600px;
+            border: none;
+            background: #000;
+        }
+        
+        .info-panel {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .info-value {
+            color: #6c757d;
+            font-family: monospace;
+        }
+        
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .preset-btn {
+            padding: 10px 15px;
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .preset-btn:hover {
+            background: #4a90e2;
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        @media (max-width: 768px) {
+            .input-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+            }
+            
+            .video-frame {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 CCTV 영상 뷰어</h1>
+            <p>실시간 CCTV 스트리밍 테스트 사이트</p>
+        </div>
+        
+        <div class="controls">
+            <div class="preset-buttons">
+                <div class="preset-btn" onclick="loadPreset('L933113')">📹 L933113 (테스트 카메라)</div>
+                <div class="preset-btn" onclick="loadPreset('E61001')">🌊 낙동강 E61001</div>
+                <div class="preset-btn" onclick="loadPreset('E61002')">🌊 낙동강 E61002</div>
+                <div class="preset-btn" onclick="loadPreset('custom')">✏️ 직접 입력</div>
+            </div>
+            
+            <div class="input-group">
+                <label for="cctvId">CCTV ID:</label>
+                <input type="text" id="cctvId" placeholder="CCTV ID를 입력하세요 (예: L933113)" value="L933113">
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="loadCCTV()">🔄 영상 로드</button>
+                <button class="btn btn-secondary" onclick="clearVideo()">🗑️ 화면 지우기</button>
+                <button class="btn btn-secondary" onclick="testConnection()">🔍 연결 테스트</button>
+            </div>
+            
+            <div id="status" class="status"></div>
+        </div>
+        
+        <div class="content">
+            <div class="video-container">
+                <iframe id="videoFrame" class="video-frame" src="about:blank"></iframe>
+            </div>
+            
+            <div class="info-panel">
+                <div class="info-item">
+                    <span class="info-label">현재 CCTV ID:</span>
+                    <span class="info-value" id="currentId">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">로드 시간:</span>
+                    <span class="info-value" id="loadTime">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">프록시 URL:</span>
+                    <span class="info-value" id="proxyUrl">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">상태:</span>
+                    <span class="info-value" id="connectionStatus">준비됨</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        const API_KEY = 'your-mobile-app-secret-key-123';
+        
+        function showStatus(message, type = 'loading') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        function loadPreset(preset) {
+            const cctvInput = document.getElementById('cctvId');
+            if (preset === 'custom') {
+                cctvInput.focus();
+                return;
+            }
+            cctvInput.value = preset;
+            loadCCTV();
+        }
+        
+        async function testConnection() {
+            const cctvId = document.getElementById('cctvId').value.trim();
+            if (!cctvId) {
+                showStatus('CCTV ID를 입력해주세요', 'error');
+                return;
+            }
+            
+            showStatus('연결 테스트 중...', 'loading');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/cctv/stream/${cctvId}`, {
+                    headers: {
+                        'X-App-API-Key': API_KEY
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus(`✅ 연결 성공: ${data.type} CCTV`, 'success');
+                    document.getElementById('connectionStatus').textContent = '연결 가능';
+                } else {
+                    showStatus(`❌ 연결 실패: ${data.error}`, 'error');
+                    document.getElementById('connectionStatus').textContent = '연결 실패';
+                }
+            } catch (error) {
+                showStatus(`❌ 네트워크 오류: ${error.message}`, 'error');
+                document.getElementById('connectionStatus').textContent = '네트워크 오류';
+            }
+        }
+        
+        async function loadCCTV() {
+            const cctvId = document.getElementById('cctvId').value.trim();
+            if (!cctvId) {
+                showStatus('CCTV ID를 입력해주세요', 'error');
+                return;
+            }
+            
+            showStatus('CCTV 영상을 로드하는 중...', 'loading');
+            
+            const videoFrame = document.getElementById('videoFrame');
+            const startTime = new Date();
+            
+            // 프록시 URL 생성
+            const proxyUrl = `${API_BASE}/api/cctv/proxy/${cctvId}?auth=${encodeURIComponent(API_KEY)}`;
+            
+            // iframe에 로드
+            videoFrame.onload = function() {
+                const loadTime = new Date() - startTime;
+                showStatus('✅ CCTV 영상이 로드되었습니다', 'success');
+                
+                // 정보 업데이트
+                document.getElementById('currentId').textContent = cctvId;
+                document.getElementById('loadTime').textContent = `${loadTime}ms`;
+                document.getElementById('proxyUrl').textContent = proxyUrl;
+                document.getElementById('connectionStatus').textContent = '로드됨';
+            };
+            
+            videoFrame.onerror = function() {
+                showStatus('❌ CCTV 영상 로드에 실패했습니다', 'error');
+                document.getElementById('connectionStatus').textContent = '로드 실패';
+            };
+            
+            videoFrame.src = proxyUrl;
+        }
+        
+        function clearVideo() {
+            const videoFrame = document.getElementById('videoFrame');
+            videoFrame.src = 'about:blank';
+            
+            // 정보 초기화
+            document.getElementById('currentId').textContent = '-';
+            document.getElementById('loadTime').textContent = '-';
+            document.getElementById('proxyUrl').textContent = '-';
+            document.getElementById('connectionStatus').textContent = '준비됨';
+            
+            showStatus('화면이 지워졌습니다', 'success');
+        }
+        
+        // 페이지 로드 시 기본 CCTV 로드
+        window.addEventListener('load', function() {
+            showStatus('CCTV 뷰어가 준비되었습니다', 'success');
+        });
+        
+        // 엔터키로 로드
+        document.getElementById('cctvId').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadCCTV();
+            }
+        });
+    </script>
+</body>
+</html>
