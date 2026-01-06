@@ -10,6 +10,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// ⭐ CCTV API 캐시 설정 (테스트: 1분)
+app.use('/api/cctv/', (req, res, next) => {
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.removeHeader('Vary');	
+  next();
+});
+
 // UTIC API 설정
 const UTIC_API_KEY = 'spdYlAuDpMu815Bqun6bM4xMjg7gBtVChlcFWMEUGqDvbRRDx9OSu8n2gXlrj3';
 const UTIC_HEADERS = {
@@ -70,6 +77,7 @@ function getCctvKind(cctvData) {
 // 메인 API: CCTV 메타데이터 + 비디오 URL
 // =============================================================================
 app.get('/api/cctv/:cctvId', async (req, res) => {
+
   try {
     const { cctvId } = req.params;
     
