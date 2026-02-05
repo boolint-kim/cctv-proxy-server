@@ -12,7 +12,7 @@ app.use(express.static('public'));
 
 // ⭐ CCTV API 캐시 설정 (테스트: 1분)
 app.use('/api/cctv/', (req, res, next) => {
-  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.setHeader('Cache-Control', 'public, max-age=300');
   res.removeHeader('Vary');	
   next();
 });
