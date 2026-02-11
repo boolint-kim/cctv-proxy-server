@@ -1,3 +1,16 @@
+// =============================================================================
+// UTIC CCTV 프록시 서버 v5.3.0
+// =============================================================================
+//
+// [로그 레벨 제어] SSH 접속 후:
+//   curl localhost:3000/admin/log-level          # 현재 레벨 확인
+//   curl localhost:3000/admin/log-level/debug    # 상세 로그 (디버깅)
+//   curl localhost:3000/admin/log-level/info     # 한 줄 요약 (기본값)
+//   curl localhost:3000/admin/log-level/error    # 에러만 출력
+//   ※ 로컬에서만 변경 가능, 외부 접근 시 403
+//
+// =============================================================================
+
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
