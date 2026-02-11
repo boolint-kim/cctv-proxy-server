@@ -10,6 +10,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// =============================================================================
+// 로그 레벨 제어 (실시간 변경 가능)
+// =============================================================================
+let logLevel = process.env.LOG_LEVEL || 'info';
+
+const logger = {
+  debug: (...args) => { if (logLevel === 'debug') console.log(...args); },
+  info: (...args) => { if (['debug', 'info'].includes(logLevel)) console.log(...args); },
+  error: (...args) => console.error(...args)
+};
+
 // ⭐ CCTV API 캐시 설정 (테스트: 1분)
 app.use('/api/cctv/', (req, res, next) => {
   res.setHeader('Cache-Control', 'public, max-age=300');
@@ -26,6 +37,28 @@ const UTIC_HEADERS = {
 
 const httpsAgent = new https.Agent({
   rejectUnauthorized: false
+});
+
+// =============================================================================
+// 로그 레벨 실시간 변경 API (로컬 전용)
+// =============================================================================
+app.get('/admin/log-level', (req, res) => {
+  res.json({ logLevel });
+});
+
+app.get('/admin/log-level/:level', (req, res) => {
+  const ip = req.ip;
+  if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  const { level } = req.params;
+  if (['debug', 'info', 'error'].includes(level)) {
+    logLevel = level;
+    console.log(`🔧 로그 레벨 변경: ${level}`);
+    res.json({ success: true, logLevel });
+  } else {
+    res.status(400).json({ error: 'debug | info | error 중 선택' });
+  }
 });
 
 // =============================================================================
@@ -81,14 +114,14 @@ app.get('/api/cctv/:cctvId', async (req, res) => {
   try {
     const { cctvId } = req.params;
     
-    console.log(`\n${'='.repeat(80)}`);
-    console.log(`📡 메타데이터 요청: ${cctvId}`);
-    console.log(`${'='.repeat(80)}`);
+    logger.debug(`\n${'='.repeat(80)}`);
+    logger.debug(`📡 메타데이터 요청: ${cctvId}`);
+    logger.debug(`${'='.repeat(80)}`);
     
     const metadataUrl = `http://www.utic.go.kr/map/getCctvInfoById.do?cctvId=${cctvId}&key=${UTIC_API_KEY}`;
     
-    console.log(`\n📤 [UTIC API 요청]`);
-    console.log(`   URL: ${metadataUrl}`);
+    logger.debug(`\n📤 [UTIC API 요청]`);
+    logger.debug(`   URL: ${metadataUrl.replace(UTIC_API_KEY, '***')}`);
     
     const response = await axios.get(metadataUrl, {
       headers: UTIC_HEADERS,
@@ -96,13 +129,14 @@ app.get('/api/cctv/:cctvId', async (req, res) => {
       httpsAgent: httpsAgent
     });
     
-    console.log(`\n📥 [UTIC API 응답]`);
-    console.log(`   Status: ${response.status}`);
-    console.log(`   Data:`, JSON.stringify(response.data, null, 2));
+    logger.debug(`\n📥 [UTIC API 응답]`);
+    logger.debug(`   Status: ${response.status}`);
+    logger.debug(`   Data:`, JSON.stringify(response.data, null, 2));
     
     const cctvData = response.data;
     
     if (cctvData.msg && cctvData.code === '9999') {
+      logger.error(`❌ 비정상 접근: ${cctvId}`);
       return res.status(403).json({
         success: false,
         error: '비정상적인 접근',
@@ -116,11 +150,11 @@ app.get('/api/cctv/:cctvId', async (req, res) => {
     // 프로토콜 결정
     const protocol = getProtocol(cctvData.CCTVID);
     
-    console.log(`\n🔄 [KIND 및 프로토콜 결정]`);
-    console.log(`   CCTVID: ${cctvData.CCTVID}`);
-    console.log(`   원본 KIND: ${cctvData.KIND}`);
-    console.log(`   보정 KIND: ${kind}`);
-    console.log(`   프로토콜: ${protocol}`);
+    logger.debug(`\n🔄 [KIND 및 프로토콜 결정]`);
+    logger.debug(`   CCTVID: ${cctvData.CCTVID}`);
+    logger.debug(`   원본 KIND: ${cctvData.KIND}`);
+    logger.debug(`   보정 KIND: ${kind}`);
+    logger.debug(`   프로토콜: ${protocol}`);
     
     // ⭐ 4대강 특별 처리
     const riverType = getRiverType(cctvData);
@@ -128,27 +162,15 @@ app.get('/api/cctv/:cctvId', async (req, res) => {
     
     if (riverType) {
       streamPageUrl = buildRiverUrl(cctvData, riverType);
-      console.log(`\n🌊 [4대강 CCTV 특별 처리]`);
-      console.log(`   강 타입: ${riverType}`);
-      console.log(`   센터명: ${cctvData.CENTERNAME}`);
-      console.log(`   ID: ${cctvData.ID}`);
-      console.log(`   PASSWD: ${cctvData.PASSWD}`);
-      if (riverType === 'geum') {
-        console.log(`   -> wlobscd: ${cctvData.PASSWD}, cctvcd: ${cctvData.ID}`);
-      } else if (riverType === 'yeongsan') {
-        console.log(`   -> wlobscd: ${cctvData.PASSWD}`);
-      } else {
-        console.log(`   -> Obscd: ${cctvData.ID}`);
-      }
+      logger.debug(`\n🌊 [4대강 CCTV] 타입: ${riverType}, 센터: ${cctvData.CENTERNAME}`);
     } else {
       streamPageUrl = buildStreamPageUrl(cctvData, kind, protocol);
     }
     
-    console.log(`\n🌐 [WebView URL 생성]`);
-    console.log(`   URL: ${streamPageUrl}`);
+    logger.debug(`\n🌐 [WebView URL] ${streamPageUrl}`);
     
-    console.log(`\n✅ ${cctvData.CCTVNAME} (${cctvData.CENTERNAME})`);
-    console.log(`${'='.repeat(80)}\n`);
+    // ⭐ info 레벨: 요청당 한 줄 요약
+    logger.info(`[CCTV] ${cctvId} → ${cctvData.CCTVNAME} (${cctvData.CENTERNAME}) kind=${kind} proto=${protocol}${riverType ? ' river=' + riverType : ''}`);
     
     res.json({
       success: true,
@@ -168,10 +190,7 @@ app.get('/api/cctv/:cctvId', async (req, res) => {
     });
     
   } catch (error) {
-    console.error(`\n❌ [오류 발생]`);
-    console.error(`   CCTV ID: ${req.params.cctvId}`);
-    console.error(`   에러: ${error.message}`);
-    console.error(`${'='.repeat(80)}\n`);
+    logger.error(`[CCTV ERROR] ${req.params.cctvId} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -208,25 +227,17 @@ function getRiverType(cctvData) {
 function buildRiverUrl(cctvData, riverType) {
   switch (riverType) {
     case 'hangang':
-      // 한강: http://hrfco.go.kr/sumun/cctvPopup.do?Obscd=1120176
-      // ID 값을 Obscd로 사용
       return `http://hrfco.go.kr/sumun/cctvPopup.do?Obscd=${cctvData.ID || ''}`;
       
     case 'nakdong':
-      // 낙동강: https://www.nakdongriver.go.kr/sumun/popup/cctvView.do?Obscd=12042
-      // ID 값을 Obscd로 사용
       return `https://www.nakdongriver.go.kr/sumun/popup/cctvView.do?Obscd=${cctvData.ID || ''}`;
       
     case 'geum':
-      // 금강: https://www.geumriver.go.kr/html/sumun/rtmpView.jsp?wlobscd=3009640&cctvcd=11016
-      // PASSWD 값을 wlobscd로, ID 값을 cctvcd로 사용
       const wlobscd = cctvData.PASSWD || '';
       const cctvcd = cctvData.ID || '';
       return `https://www.geumriver.go.kr/html/sumun/rtmpView.jsp?wlobscd=${wlobscd}&cctvcd=${cctvcd}`;
       
     case 'yeongsan':
-      // 영산강: https://www.yeongsanriver.go.kr/sumun/videoDetail.do?wlobscd=110036
-      // PASSWD 값을 wlobscd로 사용
       return `https://www.yeongsanriver.go.kr/sumun/videoDetail.do?wlobscd=${cctvData.PASSWD || ''}`;
       
     default:
@@ -274,7 +285,7 @@ function buildStreamPageUrl(cctvData, kind, protocol) {
 app.get('/', (req, res) => {
   res.json({
     message: 'UTIC CCTV 프록시 서버',
-    version: '5.2.0 - 4대강 CCTV 지원 추가',
+    version: '5.3.0 - 로그 레벨 제어 추가',
     strategy: 'WebView Only (UTIC 공식 방식 + 4대강 특별 처리)',
     changes: [
       '✅ ID 앞 3글자 기반 프로토콜 결정 (L01-L08: http, 기타: https)',
@@ -282,11 +293,13 @@ app.get('/', (req, res) => {
       '✅ undefined를 문자열 "undefined"로 처리',
       '✅ UTIC 공식 파라미터 순서 준수',
       '✅ cctvStream.js KIND 로직 반영',
-      '✅ 4대강(한강, 낙동강, 금강, 영산강) CCTV 특별 처리 추가'
+      '✅ 4대강(한강, 낙동강, 금강, 영산강) CCTV 특별 처리 추가',
+      '✅ 로그 레벨 실시간 제어 (debug/info/error)'
     ],
     endpoints: {
       'GET /api/cctv/:cctvId': 'CCTV 메타데이터 + WebView URL',
-      'GET /proxy/direct?url=': 'CORS 우회 프록시'
+      'GET /admin/log-level': '현재 로그 레벨 확인',
+      'GET /admin/log-level/:level': '로그 레벨 변경 (로컬 전용)'
     },
     urlPattern: {
       protocol: 'ID 기반 자동 결정 (L01-L08: http, 기타: https)',
@@ -311,9 +324,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎯 UTIC CCTV 프록시 서버 시작!`);
   console.log(`🌐 http://localhost:${PORT}`);
   console.log(`📦 Node.js: ${process.version}`);
+  console.log(`📊 로그 레벨: ${logLevel}`);
   console.log(`✅ UTIC 공식 패턴 완벽 재현`);
-  console.log(`✅ 프로토콜 자동 결정 (ID 기반)`);
-  console.log(`✅ 이중 인코딩 + undefined 처리`);
-  console.log(`✅ 4대강 CCTV 지원 (한강/낙동강/금강/영산강)`);
+  console.log(`✅ 4대강 CCTV 지원`);
+  console.log(`✅ 로그 레벨 실시간 제어`);
   console.log(`===============================\n`);
 });
